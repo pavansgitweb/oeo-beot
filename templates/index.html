@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Oreo Tree - Discord Bot</title>
+    <style>
+        :root {
+            --primary: #222831;
+            --secondary: #393E46;
+            --accent: #00ADB5;
+            --text: #EEEEEE;
+            --oreo-black: #2D2926;
+            --oreo-cream: #F2F0E6;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--primary);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        header {
+            background-color: var(--secondary);
+            padding: 2rem 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .oreo-logo {
+            width: 120px;
+            height: 120px;
+            background: var(--oreo-black);
+            border-radius: 50%;
+            margin: 0 auto 1rem;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .oreo-logo::before {
+            content: "";
+            position: absolute;
+            width: 90px;
+            height: 90px;
+            background: var(--oreo-cream);
+            border-radius: 50%;
+        }
+        
+        .oreo-logo::after {
+            content: "";
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: var(--oreo-black);
+            border-radius: 50%;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            background-color: var(--accent);
+            color: var(--text);
+            padding: 0.8rem 1.5rem;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 173, 181, 0.4);
+        }
+        
+        .features {
+            padding: 4rem 0;
+            background-color: var(--primary);
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background-color: var(--secondary);
+            border-radius: 10px;
+            padding: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+        }
+        
+        .commands {
+            padding: 4rem 0;
+            background-color: var(--secondary);
+        }
+        
+        .command-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+            background-color: var(--primary);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .command-table th, .command-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--secondary);
+        }
+        
+        .command-table th {
+            background-color: var(--accent);
+            color: var(--text);
+        }
+        
+        .command-table tr:hover {
+            background-color: rgba(0, 173, 181, 0.1);
+        }
+        
+        .tree-animation {
+            height: 300px;
+            width: 100%;
+            background-color: var(--secondary);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .tree {
+            width: 60px;
+            height: 200px;
+            background-color: #8B4513;
+            position: relative;
+            margin-top: 100px;
+        }
+        
+        .tree::before {
+            content: "";
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background-color: #228B22;
+            border-radius: 50%;
+            top: -120px;
+            left: -70px;
+        }
+        
+        .oreo {
+            position: absolute;
+            width: 30px;
+            height: 10px;
+            background-color: var(--oreo-black);
+            border-radius: 15px;
+        }
+        
+        .oreo::before, .oreo::after {
+            content: "";
+            position: absolute;
+            width: 30px;
+            height: 2px;
+            background-color: var(--oreo-cream);
+            border-radius: 1px;
+        }
+        
+        .oreo::before {
+            top: 2px;
+        }
+        
+        .oreo::after {
+            bottom: 2px;
+        }
+        
+        .oreo:nth-child(2) {
+            top: 20px;
+            left: 60px;
+            transform: rotate(30deg);
+        }
+        
+        .oreo:nth-child(3) {
+            top: 60px;
+            left: 20px;
+            transform: rotate(-20deg);
+        }
+        
+        .oreo:nth-child(4) {
+            top: 100px;
+            left: 80px;
+            transform: rotate(15deg);
+        }
+        
+        .oreo:nth-child(5) {
+            top: 45px;
+            left: -25px;
+            transform: rotate(-40deg);
+        }
+        
+        .oreo:nth-child(6) {
+            top: 80px;
+            left: -45px;
+            transform: rotate(25deg);
+        }
+        
+        footer {
+            background-color: var(--oreo-black);
+            color: var(--text);
+            text-align: center;
+            padding: 2rem 0;
+        }
+        
+        @media (max-width: 768px) {
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .command-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content container">
+            <div class="oreo-logo"></div>
+            <h1>The Oreo Tree</h1>
+            <p>Grow your own Oreo collection in your Discord server!</p>
+            <div>
+                <a href="#commands" class="btn">View Commands</a>
+            </div>
+        </div>
+    </header>
+    
+    <section class="tree-animation">
+        <div class="tree">
+            <div class="oreo"></div>
+            <div class="oreo"></div>
+            <div class="oreo"></div>
+            <div class="oreo"></div>
+            <div class="oreo"></div>
+            <div class="oreo"></div>
+        </div>
+    </section>
+    
+    <section class="features">
+        <div class="container">
+            <h2>Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Oreo Collection</h3>
+                    <p>Collect different types of Oreos from common to legendary rarities. Each Oreo has unique properties and value!</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Growing Tree</h3>
+                    <p>Nurture your Oreo Tree to produce more and rarer Oreos. Water it daily and watch it grow!</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Trading System</h3>
+                    <p>Trade Oreos with other server members to complete your collection or get the rarest varieties.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Server Leaderboard</h3>
+                    <p>Compete with other members to have the most valuable Oreo collection and climb the leaderboard!</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Daily Rewards</h3>
+                    <p>Claim daily rewards to help your Oreo Tree grow faster and produce better Oreos.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Special Events</h3>
+                    <p>Participate in special limited-time events to earn exclusive Oreo varieties!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <section class="commands" id="commands">
+        <div class="container">
+            <h2>Commands</h2>
+            <p>Here are some of the commands you can use with The Oreo Tree bot:</p>
+            
+            <table class="command-table">
+                <thead>
+                    <tr>
+                        <th>Command</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>$plant</td>
+                        <td>Start your Oreo Tree journey and plant your first tree</td>
+                    </tr>
+                    <tr>
+                        <td>$water</td>
+                        <td>Water your Oreo Tree (can be done once every 12 hours)</td>
+                    </tr>
+                    <tr>
+                        <td>$harvest</td>
+                        <td>Harvest Oreos from your tree</td>
+                    </tr>
+                    <tr>
+                        <td>$collection</td>
+                        <td>View your current Oreo collection</td>
+                    </tr>
+                    <tr>
+                        <td>$trade @user [oreo] [quantity]</td>
+                        <td>Offer to trade Oreos with another user</td>
+                    </tr>
+                    <tr>
+                        <td>$daily</td>
+                        <td>Claim your daily reward</td>
+                    </tr>
+                    <tr>
+                        <td>$upgrade [feature]</td>
+                        <td>Upgrade your tree to increase production or quality</td>
+                    </tr>
+                    <tr>
+                        <td>$leaderboard</td>
+                        <td>View the server's Oreo collection leaderboard</td>
+                    </tr>
+                    <tr>
+                        <td>$shop</td>
+                        <td>Visit the shop to buy tree upgrades and special items</td>
+                    </tr>
+                    <tr>
+                        <td>$help</td>
+                        <td>Display a list of all available commands</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    
+    <footer>
+        <div class="container">
+            <p>© 2025 The Oreo Tree Discord Bot - All rights reserved</p>
+            <p>Not affiliated with the official Oreo brand</p>
+        </div>
+    </footer>
+</body>
+</html>
