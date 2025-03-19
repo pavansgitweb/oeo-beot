@@ -48,6 +48,14 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS xp_data (
 connection.commit()
 
 
+# URL of Arial TTF file (this is the font used for bal )
+font_url = "https://github.com/matomo-org/travis-scripts/blob/master/fonts/Arial.ttf?raw=true"
+
+# Download the font
+response = requests.get(font_url)
+if response.status_code == 200:
+    with open("arial.ttf", "wb") as f:
+        f.write(response.content)
 
 
 #games battle setup 
@@ -132,8 +140,10 @@ async def help(ctx,which=None):
 
 #-------------------------------------------------------------------------------------
 
+#daily
 
 daily_cooldowns = {}
+
 @bot.command()
 @commands.cooldown(1, 86400, commands.BucketType.user)  
 async def daily(ctx):
@@ -147,14 +157,28 @@ async def daily(ctx):
         remaining_hours, remainder = divmod(remaining_time.seconds, 3600)
         remaining_minutes, _ = divmod(remainder, 60)
 
-        await ctx.send(f"Cooldown for your next daily: {remaining_hours} hours and {remaining_minutes} minutes.")
+        embed = discord.Embed(
+            title="⏳ Daily Reward Cooldown",
+            description=f"You can claim your next daily reward in `{remaining_hours}` hours `{remaining_minutes}` minutes.",
+            color=discord.Color.red()
+        )
+        embed.set_footer(text="Come back later for more Oreos!")
+        await ctx.send(embed=embed)
+
     else:
         reward = random.randint(250, 350)
         cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
         cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (reward, user_id))
         connection.commit()
         daily_cooldowns[user_id] = datetime.now()
-        await ctx.send(f"Congratulations! You earned {reward} Oreos.")
+
+        embed = discord.Embed(
+            title="🎉 Daily Reward Claimed!",
+            description=f"Congratulations! You earned `{reward} Oreos` today.",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="Enjoy your Oreos and come back tomorrow for more!")
+        await ctx.send(embed=embed)
 
 @daily.error
 async def daily_error(ctx, error):
@@ -163,7 +187,13 @@ async def daily_error(ctx, error):
         remaining_hours, remainder = divmod(remaining_time, 3600)
         remaining_minutes, _ = divmod(remainder, 60)
 
-        await ctx.send(f"You are currently on cooldown, try again in `{int(remaining_hours)}` hours  `{int(remaining_minutes)}` minutes.")
+        embed = discord.Embed(
+            title="⏳ Daily Reward Cooldown",
+            description=f"You are on cooldown. Try again in `{int(remaining_hours)}` hours `{int(remaining_minutes)}` minutes.",
+            color=discord.Color.orange()
+        )
+        embed.set_footer(text="Patience is key! More Oreos coming soon!")
+        await ctx.send(embed=embed)
 
 
 #------------------------------------------------------------------------------------
@@ -238,112 +268,119 @@ async def msgdel(ctx, error):
 # Game command
 @bot.command()
 async def game(ctx, option=None):
-  daily_game_limit = 30
-  user_id = ctx.author.id
-  current_time = datetime.now()
-  cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
-  user_game_count_result = cursor.fetchone()
-  user_game_count = user_game_count_result[0] if user_game_count_result else 0
+    daily_game_limit = 30
+    user_id = ctx.author.id
+    current_time = datetime.now()
 
+    cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
+    user_game_count_result = cursor.fetchone()
+    user_game_count = user_game_count_result[0] if user_game_count_result else 0
 
-  cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
-  connection.commit()
+    cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
+    connection.commit()
 
-  cursor.execute("SELECT last_played, user_game_count FROM xp_data WHERE user_id = ?", (user_id,))
-  user_data = cursor.fetchone()
+    cursor.execute("SELECT last_played, user_game_count FROM xp_data WHERE user_id = ?", (user_id,))
+    user_data = cursor.fetchone()
 
-  if user_data:
-      last_played, user_game_count = user_data
+    if user_data:
+        last_played, user_game_count = user_data
+        if last_played:
+            time_difference = current_time - datetime.fromisoformat(last_played)
+            if time_difference.days >= 1:
+                user_game_count = 0
 
-      if last_played:
-          # Calculate the time difference
-          time_difference = current_time - datetime.fromisoformat(last_played)
+        user_game_count += 1
+        cursor.execute('UPDATE xp_data SET user_game_count = ?, last_played = ? WHERE user_id = ?',
+                       (user_game_count, current_time.isoformat(), user_id))
+    else:
+        user_game_count = 1
+        cursor.execute('INSERT INTO xp_data (user_id, user_game_count, last_played) VALUES (?, ?, ?)',
+                       (user_id, user_game_count, current_time.isoformat()))
 
-          # If more than 24 hours have passed, reset the game count
-          if time_difference.days >= 1:
-              user_game_count = 0
+    connection.commit()
 
-      user_game_count += 1
-      cursor.execute('UPDATE xp_data SET user_game_count = ?, last_played = ? WHERE user_id = ?',
-                     (user_game_count, current_time.isoformat(), user_id))
-  else:
-      # If user is new, initialize the data
-      user_game_count = 1
-      cursor.execute('INSERT INTO xp_data (user_id, user_game_count, last_played) VALUES (?, ?, ?)',
-                     (user_id, user_game_count, current_time.isoformat()))
+    if user_game_count > daily_game_limit:
+        embed = discord.Embed(
+            title="🚫 Daily Limit Reached",
+            description="You've reached the daily game limit. Try again tomorrow!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
 
-  connection.commit()
+    correct_reward = random.randint(19, 32)
+    allowed_channel_id = [1166294561300168735, 1166473829195984977, 1166473801056387163]
+    if ctx.channel.id not in allowed_channel_id:
+        embed = discord.Embed(
+            title="❌ Wrong Channel",
+            description="This command can only be used in Oreo chats.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
 
-  if user_game_count > daily_game_limit:
-      await ctx.send("You've reached the daily game limit. Try again tomorrow!")
-      return
+    character_data = character_images_op if option == 'op' else character_images
+    character_entry = random.choice(list(character_data.items()))
+    character_name = character_entry[0]
+    alternative_names = character_entry[1]['names']
+    image_url = character_entry[1]['image']
 
-  correct_reward = random.randint(19, 32)
-  allowed_channel_id = [1166294561300168735, 1166473829195984977, 1166473801056387163]
-  if ctx.channel.id not in allowed_channel_id:
-      await ctx.send("This command can only be used in oreo chats")
-      return
+    embed = discord.Embed(title="🕵️‍♂️ Character Guessing Game", color=discord.Color.blue())
+    embed.set_image(url=image_url)
+    embed.set_footer(text="You have 3 attempts! Type the character name to guess.")
+    await ctx.send(embed=embed)
 
-  character_data = character_images_op if option == 'op' else character_images 
+    def check(message):
+        return message.author == ctx.author
 
-  character_entry = random.choice(list(character_data.items()))
-  character_name = character_entry[0]
-  alternative_names = character_entry[1]['names']
-  image_url = character_entry[1]['image'] 
+    attempts = 3
+    while attempts > 0:
+        try:
+            user_guess = await bot.wait_for('message', timeout=15, check=check)
+            guess = user_guess.content.strip().lower()
 
-  cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
-  user_game_count = cursor.fetchone()
+            if guess in [name.lower() for name in alternative_names]:
+                cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (correct_reward, user_id))
+                connection.commit()
 
-  embed = discord.Embed(title='Character Guessing Game')
-  embed.set_image(url=image_url)
-  embed.set_footer(text='Type the character name to guess.')
+                games_left = max(0, daily_game_limit - user_game_count)
+                embed = discord.Embed(
+                    title="🎉 Correct!",
+                    description=f"💰 You won **{correct_reward}** Oreos!",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="✅ Possible Answers", value=f"**{character_name}**", inline=False)
+                embed.add_field(name="🎮 Games Remaining", value=f"`{games_left}` games left today", inline=False)
+                await ctx.send(embed=embed)
+                return
+            else:
+                attempts -= 1
+                if attempts > 0:
+                    embed = discord.Embed(
+                        title="❌ Wrong Answer",
+                        description=f"Try again! You have `{attempts}` attempts left.",
+                        color=discord.Color.orange()
+                    )
+                    await ctx.send(embed=embed)
+                else:
+                    embed = discord.Embed(
+                        title="❌ Game Over!",
+                        description="You have no more attempts left.",
+                        color=discord.Color.red()
+                    )
+                    embed.add_field(name="✅ Correct Answer", value=f"**{character_name}**", inline=False)
+                    await ctx.send(embed=embed)
+                    return
 
-  await ctx.send(embed=embed)
-
-  def check(message):
-      return message.author == ctx.author
-
-  try:
-      user_guess = await bot.wait_for('message', timeout=15, check=check)
-      guess = user_guess.content.capitalize()   
-
-      if guess.lower() in [name.lower() for name in alternative_names]:
-          # Correct guess
-          user_id = ctx.author.id
-          cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
-          user_game_count_result = cursor.fetchone()
-          user_game_count = user_game_count_result[0] if user_game_count_result else 0
-          cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
-          cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (correct_reward, user_id))
-          connection.commit()
-
-          games_left = max(0, daily_game_limit - user_game_count)
-
-          embed = discord.Embed(title='Correct!', description=f'💰 You won **{correct_reward}** oreos')
-          embed.add_field(name='Possible Answers', value=f'{character_name}', inline=False)
-          embed.add_field(name='',value=f'You have {games_left} games remaining!')
-          await ctx.send(embed=embed)
-
-      else: 
-          cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
-          user_game_count_result = cursor.fetchone()
-          user_game_count = user_game_count_result[0] if user_game_count_result else 0
-          games_left = max(0, daily_game_limit - user_game_count)
-          # Incorrect guess
-          embed = discord.Embed(title='Incorrect', description='❌ You did not answer correctly.')
-          embed.add_field(name='Possible Answers', value=f'{character_name}', inline=False)
-          embed.add_field(name='',value=f'You have {games_left} games remaining!')
-          await ctx.send(embed=embed)
-
-  except asyncio.TimeoutError:
-      cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
-      user_game_count_result = cursor.fetchone()
-      user_game_count = user_game_count_result[0] if user_game_count_result else 0
-      games_left = max(0, daily_game_limit - user_game_count)
-      embed = discord.Embed(title='Incorrect', description='❌ You did not answer correctly.')
-      embed.add_field(name='Possible Answers', value=f'{character_name}', inline=False)
-      embed.add_field(name='',value=f'You have {games_left} games remaining!')
-      await ctx.send(embed=embed)
+        except asyncio.TimeoutError:
+            embed = discord.Embed(
+                title="⏳ Time's Up!",
+                description="You took too long to respond.",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="✅ Correct Answer was", value=f"**{character_name}**", inline=False)
+            await ctx.send(embed=embed)
+            return
 
 
 async def spawn_game(channel):
@@ -422,63 +459,78 @@ async def lb(ctx):
   #-----------------------------------------------------------------------------------
 
 
-
 #bal
-@bot.command()
+
+@bot.command(name='bal', help="$bal to see how many Oreos you have")
 async def bal(ctx, user: discord.User = None):
-    background_url = 'https://cdn.discordapp.com/attachments/1166294561300168735/1167720973034852402/20231028_123557.jpg'
+    background_url = 'https://c4.wallpaperflare.com/wallpaper/7/670/485/line-multi-colored-black-background-wallpaper-preview.jpg'
     background_response = requests.get(background_url)
     background_image = Image.open(io.BytesIO(background_response.content))
 
     user_id = ctx.author.id if user is None else user.id
 
-    cursor.execute('SELECT xp, level FROM xp_data WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT xp, level, bank FROM xp_data WHERE user_id = ?', (user_id,))
     data = cursor.fetchone()
 
     if data is None:
         await ctx.send("User data not found.")
     else:
-        xp, level = data  # that scared me fr , i was at down all turned orange 
-    cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?', (user_id,))
-    bank = cursor.fetchone()
+        xp, level, bank = data
 
-    if data is None:
-      await ctx.send("Data not found.")
-    else:
-        bank = bank[0]
         img = Image.new('RGB', background_image.size, color='white')
         img.paste(background_image, (0, 0))
         d = ImageDraw.Draw(img)
-        font = ImageFont.load_default()
-        font = ImageFont.truetype("Swansea-q3pd.ttf", 60)
-        text = f"{xp}"
-        d.text((450, 220), text, fill='white', font=font)
-        text = f"{bank}"
-        d.text((425, 350), text, fill='white', font=font)
-        user = ctx.author if user is None else user 
+        wallet_font = ImageFont.truetype("arial.ttf", 34)
+        bank_font = ImageFont.truetype("Swansea-q3pd.ttf", 35)
 
+        wallet_icon_url = "https://i.postimg.cc/QtHyrgKn/image.png"
+        bank_icon_url = "https://cdn-icons-png.freepik.com/256/8176/8176383.png"
+
+        wallet_icon_response = requests.get(wallet_icon_url)
+        wallet_icon = Image.open(io.BytesIO(wallet_icon_response.content)).convert("RGBA")
+        wallet_icon = wallet_icon.resize((55, 65))
+
+        bank_icon_response = requests.get(bank_icon_url)
+        bank_icon = Image.open(io.BytesIO(bank_icon_response.content)).convert("RGBA")
+        bank_icon = bank_icon.resize((40, 40))
+
+        wallet_text = f"Wallet : {xp:,} Oreos"
+        bank_text = f"Bank : {bank:,} Oreos"
+
+        
+        d.text((100, 100), wallet_text, fill='white', font=wallet_font)
+        d.text((100, 160), bank_text, fill='white', font=bank_font)
+
+        img.paste(wallet_icon, (40,80), wallet_icon)
+        img.paste(bank_icon, (50, 155), bank_icon)
+
+        user = ctx.author if user is None else user
         pfp = user.avatar.url
         response = requests.get(pfp)
+
         if response.status_code == 200:
             pfp_content = response.content
             pfp_img = Image.open(io.BytesIO(pfp_content)).convert('RGB')
-            pfp_img = ImageOps.fit(pfp_img, (64, 64), method=0, bleed=0.0, centering=(0.5, 0.5))
+            pfp_img = ImageOps.fit(pfp_img, (80, 80), method=0, bleed=0.0, centering=(0.5, 0.5))
 
-
-            mask = Image.new('L', (64, 64), 0)
+            mask = Image.new('L', (80, 80), 0)
             draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0, 64, 64), fill=255)
-
+            draw.ellipse((0, 0, 80, 80), fill=255)
             pfp_img.putalpha(mask)
 
-
-            img.paste(pfp_img, (800, 635), pfp_img)
+            img_width, img_height = img.size
+            img.paste(pfp_img, (img_width - 100, img_height - 100), pfp_img)
         else:
             await ctx.send("Failed to fetch user's avatar.")
+            return
+
         username = user.name
-        font = ImageFont.load_default()
-        font= ImageFont.truetype("Swansea-q3pd.ttf", 45)
-        d.text((900, 650), username, fill='white', font=font)
+        font = ImageFont.truetype("Swansea-q3pd.ttf", 30)
+        text_bbox = d.textbbox((0, 0), username, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        img_width, _ = img.size
+        d.text(((img_width - text_width) / 2, 20), username, fill='white', font=font)
+
         image_buffer = io.BytesIO()
         img.save(image_buffer, format="PNG")
         image_buffer.seek(0)
@@ -503,7 +555,7 @@ async def rate(ctx,user_id):
 
 
 #give and take oreos 
-memberss = {797057126707101716,864193768039120907}
+memberss = {797057126707101716,864193768039120907,}
 @bot.command()
 async def oreo(ctx, option, user: discord.User, amount: int,database):
 

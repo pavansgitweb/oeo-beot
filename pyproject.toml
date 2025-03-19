@@ -17,6 +17,7 @@ opuslib = "^3.0.1"
 youtube-dl = "^2021.12.17"
 yt-dlp = "^2023.11.16"
 discord-py = "^2.3.2"
+watchdog = "^6.0.0"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
