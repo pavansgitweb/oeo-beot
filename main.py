@@ -519,17 +519,42 @@ async def bal(ctx, user: discord.User = None):
             pfp_img.putalpha(mask)
 
             img_width, img_height = img.size
-            img.paste(pfp_img, (img_width - 100, img_height - 100), pfp_img)
+            pfp_x = img_width - 88
+            pfp_y = img_height - 130  # Move PFP slightly up
+
+            img.paste(pfp_img, (pfp_x, pfp_y), pfp_img)
         else:
             await ctx.send("Failed to fetch user's avatar.")
             return
 
         username = user.name
-        font = ImageFont.truetype("Swansea-q3pd.ttf", 30)
+        font = ImageFont.truetype("arial.ttf", 30)
         text_bbox = d.textbbox((0, 0), username, font=font)
         text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
         img_width, _ = img.size
-        d.text(((img_width - text_width) / 2, 20), username, fill='white', font=font)
+
+        text_x = (img_width - text_width) / 2
+        text_y = 20  # Keep it at the same height
+
+        # Draw the username
+        d.text((text_x, text_y), username, fill='white', font=font)
+
+        # Draw the underline
+        underline_y = text_y + text_height + 5  # Slightly below the text
+        d.line((text_x, underline_y, text_x + text_width, underline_y), fill='white', width=2)
+
+
+        # Add display name below the profile picture
+        display_name = user.display_name
+        font_display = ImageFont.truetype("arial.ttf", 25)
+        text_bbox = d.textbbox((0, 0), display_name, font=font_display)
+        text_width = text_bbox[2] - text_bbox[0]
+
+        text_x = pfp_x + (80 - text_width) // 2  # Center text under PFP
+        text_y = pfp_y  + 95  # Just below the PFP
+
+        d.text((text_x, text_y), display_name, fill='white', font=font_display)
 
         image_buffer = io.BytesIO()
         img.save(image_buffer, format="PNG")
