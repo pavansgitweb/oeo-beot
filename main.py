@@ -426,7 +426,7 @@ async def lb(ctx):
 #bal
 @bot.command()
 async def bal(ctx, user: discord.User = None):
-    background_url = 'https://cdn.discordapp.com/attachments/1166294561300168735/1167720973034852402/20231028_123557.jpg?ex=654f27e7&is=653cb2e7&hm2bccee8bc478653c7cbd09c9656fb875797720f36f30b85204b80c84d01244a9&'
+    background_url = 'https://cdn.discordapp.com/attachments/1166294561300168735/1167720973034852402/20231028_123557.jpg'
     background_response = requests.get(background_url)
     background_image = Image.open(io.BytesIO(background_response.content))
 
