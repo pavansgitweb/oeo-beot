@@ -39,11 +39,11 @@ bot.remove_command('help')
 k_id = 797057126707101716
 
 # Database setup
-connection = sqlite3.connect('xp_data.db')
+connection = sqlite3.connect('wallet_data.db')
 cursor = connection.cursor()
-cursor.execute('''CREATE TABLE IF NOT EXISTS xp_data (
+cursor.execute('''CREATE TABLE IF NOT EXISTS wallet_data (
                     user_id INTEGER PRIMARY KEY,
-                    xp INTEGER DEFAULT 0,
+                    wallet INTEGER DEFAULT 0,
                     level INTEGER DEFAULT 1,
                     user_game_count INTEGER DEFAULT 0,
                     last_played TEXT DEFAULT NULL,
@@ -162,8 +162,8 @@ async def daily(ctx):
 
     else:
         reward = random.randint(250, 350)
-        cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
-        cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (reward, user_id))
+        cursor.execute('INSERT OR IGNORE INTO wallet_data (user_id) VALUES (?)', (user_id,))
+        cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (reward, user_id))
         connection.commit()
         daily_cooldowns[user_id] = datetime.now()
 
@@ -213,7 +213,7 @@ async def make(ctx):
     else:
 
         reward = random.randint(100, 200)  
-        cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (reward, user_id))
+        cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (reward, user_id))
 
         connection.commit()
         daily_cooldowns[user_id] = datetime.now()
@@ -266,14 +266,14 @@ async def game(ctx, option=None):
     user_id = ctx.author.id
     current_time = datetime.now()
 
-    cursor.execute('SELECT user_game_count FROM xp_data WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT user_game_count FROM wallet_data WHERE user_id = ?', (user_id,))
     user_game_count_result = cursor.fetchone()
     user_game_count = user_game_count_result[0] if user_game_count_result else 0
 
-    cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
+    cursor.execute('INSERT OR IGNORE INTO wallet_data (user_id) VALUES (?)', (user_id,))
     connection.commit()
 
-    cursor.execute("SELECT last_played, user_game_count FROM xp_data WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT last_played, user_game_count FROM wallet_data WHERE user_id = ?", (user_id,))
     user_data = cursor.fetchone()
 
     if user_data:
@@ -284,11 +284,11 @@ async def game(ctx, option=None):
                 user_game_count = 0
 
         user_game_count += 1
-        cursor.execute('UPDATE xp_data SET user_game_count = ?, last_played = ? WHERE user_id = ?',
+        cursor.execute('UPDATE wallet_data SET user_game_count = ?, last_played = ? WHERE user_id = ?',
                        (user_game_count, current_time.isoformat(), user_id))
     else:
         user_game_count = 1
-        cursor.execute('INSERT INTO xp_data (user_id, user_game_count, last_played) VALUES (?, ?, ?)',
+        cursor.execute('INSERT INTO wallet_data (user_id, user_game_count, last_played) VALUES (?, ?, ?)',
                        (user_id, user_game_count, current_time.isoformat()))
 
     connection.commit()
@@ -334,7 +334,7 @@ async def game(ctx, option=None):
             guess = user_guess.content.strip().lower()
 
             if guess in [name.lower() for name in alternative_names]:
-                cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (correct_reward, user_id))
+                cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (correct_reward, user_id))
                 connection.commit()
 
                 games_left = max(0, daily_game_limit - user_game_count)
@@ -409,8 +409,8 @@ async def spawn_game(channel):
 
               correct_reward = random.randint(15, 30)
 
-              cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user_id,))
-              cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (correct_reward, user_id))
+              cursor.execute('INSERT OR IGNORE INTO wallet_data (user_id) VALUES (?)', (user_id,))
+              cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (correct_reward, user_id))
 
               connection.commit()
 
@@ -443,7 +443,7 @@ import math
 async def leaderboard(ctx, page: int = 1):
     per_page = 9  # Users per page
     try:
-        cursor.execute('SELECT user_id, xp, bank FROM xp_data ORDER BY (xp + bank) DESC')
+        cursor.execute('SELECT user_id, wallet, bank FROM wallet_data ORDER BY (wallet + bank) DESC')
         all_users = cursor.fetchall()
     except Exception as e:
         await ctx.send(f"Database error: {e}")
@@ -497,12 +497,12 @@ async def leaderboard(ctx, page: int = 1):
     y_offset = 250
     user_rank = next((rank for rank, (uid, _, _) in enumerate(all_users, start=1) if uid == ctx.author.id), None)
 
-    for i, (user_id, xp, bank) in enumerate(top_users, start=start_index + 1):
+    for i, (user_id, wallet, bank) in enumerate(top_users, start=start_index + 1):
         user = ctx.guild.get_member(user_id) or await bot.fetch_user(user_id)
         if not user:
             continue
 
-        total_oreos = xp + bank
+        total_oreos = wallet + bank
         d.text((80, y_offset), f"#{i} {user.name}", fill='white', font=font)
         d.text((200, y_offset + 85), f"{total_oreos:,} Oreos", fill='gold', font=font)
         y_offset += 180
@@ -532,13 +532,13 @@ async def bal(ctx, user: discord.User = None):
 
     user_id = ctx.author.id if user is None else user.id
 
-    cursor.execute('SELECT xp, level, bank FROM xp_data WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT wallet, level, bank FROM wallet_data WHERE user_id = ?', (user_id,))
     data = cursor.fetchone()
 
     if data is None:
         await ctx.send("User data not found.")
     else:
-        xp, level, bank = data
+        wallet, level, bank = data
 
         img = Image.new('RGB', background_image.size, color='white')
         img.paste(background_image, (0, 0))
@@ -557,7 +557,7 @@ async def bal(ctx, user: discord.User = None):
         bank_icon = Image.open(io.BytesIO(bank_icon_response.content)).convert("RGBA")
         bank_icon = bank_icon.resize((40, 40))
 
-        wallet_text = f"Wallet : {xp:,} Oreos"
+        wallet_text = f"Wallet : {wallet:,} Oreos"
         bank_text = f"Bank : {bank:,} Oreos"
 
         
@@ -658,7 +658,7 @@ async def rate(ctx, user: discord.Member = None):
     if rating == 10:
         await ctx.send(f"🎉 {user.mention} won **10 Oreos** for getting a perfect 10/10! 🍪")
         try:
-            cursor.execute('UPDATE xp_data SET xp = xp + 10 WHERE user_id = ?', (user.id,))
+            cursor.execute('UPDATE wallet_data SET wallet = wallet + 10 WHERE user_id = ?', (user.id,))
             db.commit()
         except Exception as e:
             await ctx.send(f"Database error: {e}")
@@ -685,15 +685,15 @@ async def oreo(ctx, option: str = None, user: discord.Member = None, amount: int
         await ctx.send("❌ Invalid option! Use 'add' or 'remove'.")
         return
     
-    column = "xp" if database.lower() == "wallet" else "bank"
+    column = "wallet" if database.lower() == "wallet" else "bank"
     
-    cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user.id,))
+    cursor.execute('INSERT OR IGNORE INTO wallet_data (user_id) VALUES (?)', (user.id,))
     
     if option.lower() == "add":
-        cursor.execute(f'UPDATE xp_data SET {column} = {column} + ? WHERE user_id = ?', (amount, user.id))
+        cursor.execute(f'UPDATE wallet_data SET {column} = {column} + ? WHERE user_id = ?', (amount, user.id))
         await ctx.send(f"✅ Added {amount} Oreos to {user.mention}'s {database.capitalize()}.")
     else:
-        cursor.execute(f'UPDATE xp_data SET {column} = {column} - ? WHERE user_id = ?', (amount, user.id))
+        cursor.execute(f'UPDATE wallet_data SET {column} = {column} - ? WHERE user_id = ?', (amount, user.id))
         await ctx.send(f"❌ Removed {amount} Oreos from {user.mention}'s {database.capitalize()}.")
     
     connection.commit()
@@ -708,11 +708,11 @@ async def coin(ctx, ht, amount: int):
     user_id = str(ctx.author.id)
 
     # Fetch user data
-    cursor.execute("SELECT xp, flips_today, last_flip FROM xp_data WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT wallet, flips_today, last_flip FROM wallet_data WHERE user_id = ?", (user_id,))
     user_data = cursor.fetchone()
 
     if user_data is None:
-        cursor.execute("INSERT INTO xp_data (user_id, xp, flips_today, last_flip) VALUES (?, ?, ?, ?)", 
+        cursor.execute("INSERT INTO wallet_data (user_id, wallet, flips_today, last_flip) VALUES (?, ?, ?, ?)", 
                        (user_id, 1000, 0, datetime.now().isoformat()))
         connection.commit()
         user_data = (1000, 0, datetime.now().isoformat())
@@ -765,7 +765,7 @@ async def coin(ctx, ht, amount: int):
     await ctx.send(embed=embed)
 
     # Update database
-    cursor.execute("UPDATE xp_data SET xp = ?, flips_today = ?, last_flip = ? WHERE user_id = ?", 
+    cursor.execute("UPDATE wallet_data SET wallet = ?, flips_today = ?, last_flip = ? WHERE user_id = ?", 
                    (new_balance, flips_today + 1, datetime.now().isoformat(), user_id))
     connection.commit()
 
@@ -807,14 +807,14 @@ async def buy(ctx, item):
 
     if item.lower() in shop_items:
         price = shop_items[item.lower()]
-        cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT bank FROM wallet_data WHERE user_id = ?', (user_id,))
         user_bank_balance = cursor.fetchone()
 
         if user_bank_balance:
             user_bank_balance = user_bank_balance[0]
 
             if user_bank_balance >= price:
-                cursor.execute('UPDATE xp_data SET bank = bank - ? WHERE user_id = ?', (price, user_id))
+                cursor.execute('UPDATE wallet_data SET bank = bank - ? WHERE user_id = ?', (price, user_id))
                 connection.commit()
 
                 role_name = item.lower()
@@ -974,7 +974,7 @@ async def steal(ctx, target: discord.User):
         await ctx.send("You can't steal from yourself.")
         return
 
-    cursor.execute('SELECT xp FROM xp_data WHERE user_id = ?', (target_id,))
+    cursor.execute('SELECT wallet FROM wallet_data WHERE user_id = ?', (target_id,))
     target_data = cursor.fetchone()
 
     if target_data:
@@ -989,10 +989,10 @@ async def steal(ctx, target: discord.User):
                 amount_stolen = random.randint(1,max_steal)
 
                 # Deduct the stolen Oreos 
-                cursor.execute('UPDATE xp_data SET xp = xp - ? WHERE user_id = ?', (amount_stolen, target_id))
+                cursor.execute('UPDATE wallet_data SET wallet = wallet - ? WHERE user_id = ?', (amount_stolen, target_id))
 
                 # Add the stolen Oreos to the user's balance
-                cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (amount_stolen, user_id))
+                cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (amount_stolen, user_id))
 
                 # Update the total Oreos stolen by the user
                 if user_id in total_oreos_stolen:
@@ -1031,8 +1031,8 @@ async def steal_error(ctx, error):
 async def dep(ctx, amount: Union[str, int]):
     user_id = str(ctx.author.id)
 
-    # Check if the user has a balance in xp_data.db
-    cursor.execute('SELECT xp FROM xp_data WHERE user_id = ?', (user_id,))
+    # Check if the user has a balance in wallet_data.db
+    cursor.execute('SELECT wallet FROM wallet_data WHERE user_id = ?', (user_id,))
     user_data = cursor.fetchone()
 
     if user_data:
@@ -1041,12 +1041,12 @@ async def dep(ctx, amount: Union[str, int]):
         if amount.lower() == "all":
             if user_balance > 0:
                 # Deposit the entire wallet balance to the bank
-                cursor.execute('UPDATE xp_data SET xp = xp - ? WHERE user_id = ?', (user_balance, user_id))
-                cursor.execute('UPDATE xp_data SET bank = bank + ? WHERE user_id = ?', (user_balance, user_id))
+                cursor.execute('UPDATE wallet_data SET wallet = wallet - ? WHERE user_id = ?', (user_balance, user_id))
+                cursor.execute('UPDATE wallet_data SET bank = bank + ? WHERE user_id = ?', (user_balance, user_id))
                 connection.commit()
-                cursor.execute('SELECT xp FROM xp_data WHERE user_id = ?', (user_id,))
+                cursor.execute('SELECT wallet FROM wallet_data WHERE user_id = ?', (user_id,))
                 user_bal = cursor.fetchone()[0]
-                cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?',(user_id,))
+                cursor.execute('SELECT bank FROM wallet_data WHERE user_id = ?',(user_id,))
                 bank_balance = cursor.fetchone()[0]
 
                 embed = discord.Embed(
@@ -1067,13 +1067,13 @@ async def dep(ctx, amount: Union[str, int]):
             deposit_amount = int(amount)
             if deposit_amount <= user_balance:
                 # Deposit the specified amount from the user's balance
-                cursor.execute('UPDATE xp_data SET xp = xp - ? WHERE user_id = ?', (deposit_amount, user_id))
-                cursor.execute('UPDATE xp_data SET bank = bank + ? WHERE user_id = ?', (deposit_amount, user_id))
+                cursor.execute('UPDATE wallet_data SET wallet = wallet - ? WHERE user_id = ?', (deposit_amount, user_id))
+                cursor.execute('UPDATE wallet_data SET bank = bank + ? WHERE user_id = ?', (deposit_amount, user_id))
                 connection.commit()
 
-                cursor.execute('SELECT xp FROM xp_data WHERE user_id = ?', (user_id,))
+                cursor.execute('SELECT wallet FROM wallet_data WHERE user_id = ?', (user_id,))
                 user_balance = cursor.fetchone()[0]
-                cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?', (user_id,))
+                cursor.execute('SELECT bank FROM wallet_data WHERE user_id = ?', (user_id,))
                 bank_balance = cursor.fetchone()[0]
 
                 embed = discord.Embed(
@@ -1103,14 +1103,14 @@ async def dep(ctx, amount: Union[str, int]):
 async def wd(ctx, amount: int):
     user_id = str(ctx.author.id)
 
-    # Check if the user has a balance in xp_data.db
-    cursor.execute('SELECT xp FROM xp_data WHERE user_id = ?', (user_id,))
+    # Check if the user has a balance in wallet_data.db
+    cursor.execute('SELECT wallet FROM wallet_data WHERE user_id = ?', (user_id,))
     user_data = cursor.fetchone()
 
     if user_data:
         user_balance = user_data[0]
 
-    cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT bank FROM wallet_data WHERE user_id = ?', (user_id,))
     user_bank = cursor.fetchone()
     if user_bank:
         user_bank = user_bank[0]
@@ -1120,13 +1120,13 @@ async def wd(ctx, amount: int):
             await ctx.send("You don't have enough Oreos to withdraw.")
         else:
             # Deduct the amount from the user's balance
-            cursor.execute('UPDATE xp_data SET bank = bank - ? WHERE user_id = ?', (amount, user_id))
+            cursor.execute('UPDATE wallet_data SET bank = bank - ? WHERE user_id = ?', (amount, user_id))
 
             # Add the same amount to the bank
-            cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (amount,user_id ))
+            cursor.execute('UPDATE wallet_data SET wallet = wallet + ? WHERE user_id = ?', (amount,user_id ))
 
             connection.commit()
-            cursor.execute('SELECT bank FROM xp_data WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT bank FROM wallet_data WHERE user_id = ?', (user_id,))
             bank_balance = cursor.fetchone()[0]
 
             embed = discord.Embed(
