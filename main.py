@@ -46,11 +46,12 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS xp_data (
                     xp INTEGER DEFAULT 0,
                     level INTEGER DEFAULT 1,
                     user_game_count INTEGER DEFAULT 0,
-                    last_played TEXT DEFAULT NULL
+                    last_played TEXT DEFAULT NULL,
+                    last_flip TEXT DEFAULT NULL,
+                    flips_today INTEGER DEFAULT 0,
+                    bank INTEGER DEFAULT 0
                 )''')
-
 connection.commit()
-
 
 #games battle setup 
 target_channel_id = 1166317975557644318
@@ -628,164 +629,147 @@ async def bal(ctx, user: discord.User = None):
 #------------------------------------------------------------------------------------
 
 
-#rateninja
-@bot.command(help="$rate - rates you or a person between 0 and 10")
-async def rate(ctx,user_id): 
+import random
+import discord
+from discord.ext import commands
 
-     rating = random.randint(0,10)
-     await ctx.send(f"umm I rate {user_id} a {rating}/10!")
+@bot.command(help="$rate - Rates you or a person between 0 and 10")
+async def rate(ctx, user: discord.Member = None):
+    user = user or ctx.author  # Defaults to the command user if no one is mentioned
+    rating = random.randint(0, 10)
+    
+    # Define responses for different rating levels
+    rating_messages = {
+        0: "Oh no... that's a solid 0/10. Better luck next time! 😭",
+        1: "A 1/10... at least it's not zero! 😅",
+        5: "A clean 5/10—pretty balanced, I'd say! ⚖️",
+        7: "7/10? Looking sharp! 🔥",
+        9: "Ooooh, a 9/10! Almost perfect! 🌟",
+        10: "10/10? Absolute perfection! 👑"
+    }
+    
+    response = rating_messages.get(rating, f"I rate {user.mention} a {rating}/10! 🎲")
+    embed = discord.Embed(title="Rate Machine 🎭", description=response, color=discord.Color.blue())
+    embed.set_footer(text=f"Requested by {ctx.author.display_name}")
+    embed.set_thumbnail(url=user.avatar.url)
+    
+    await ctx.send(embed=embed)
+    
+    if rating == 10:
+        await ctx.send(f"🎉 {user.mention} won **10 Oreos** for getting a perfect 10/10! 🍪")
+        try:
+            cursor.execute('UPDATE xp_data SET xp = xp + 10 WHERE user_id = ?', (user.id,))
+            db.commit()
+        except Exception as e:
+            await ctx.send(f"Database error: {e}")
 
-     if rating == 10:
-      await ctx.send("u won 10 oreos for getting a 10/10")
+# ------------------------------------------------------------------------------------------------------------------------------
 
-      cursor.execute('UPDATE xp_data SET xp = + 10 ? WHERE user_id = ?', )
+# List of authorized user IDs
+AUTHORIZED_USERS = {797057126707101716, 864193768039120907}
 
+@bot.command(help="$oreo <add/remove> <user> <amount> <wallet/bank>")
+async def oreo(ctx, option: str = None, user: discord.Member = None, amount: int = None, database: str = None):
+    if ctx.author.id not in AUTHORIZED_USERS:
+        return
+    
+    if not option or not user or amount is None or not database:
+        await ctx.send("❌ Incorrect syntax! Use: `$oreo <add/remove> <@user> <amount> <wallet/bank>`")
+        return
+    
+    if database.lower() not in ["wallet", "bank"]:
+        await ctx.send("❌ Invalid database! Use 'wallet' or 'bank'.")
+        return
 
-#give and take oreos 
-memberss = {797057126707101716,864193768039120907,}
-@bot.command()
-async def oreo(ctx, option, user: discord.User, amount: int,database):
-
-  if ctx.author.id in memberss :
-    if database == "wallet" :
-      if (option == "add") :
-        cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user.id,))
-
-        cursor.execute('UPDATE xp_data SET xp = xp + ? WHERE user_id = ?', (amount, user.id))
-        connection.commit()
-
-        await ctx.send(f"Added {amount} Oreos to {user.mention}'s wallet.")
-      elif (option=="remove"):
-
-         cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user.id,))
-
-         cursor.execute('UPDATE xp_data SET xp = xp - ? WHERE user_id = ?', (amount, user.id))
-         connection.commit()
-
-
-         await ctx.send(f"Taken {amount} Oreos from {user.mention}")
-
-    elif database == "bank" :
-      if (option == "add") :
-        # Add the same amount to the bank
-        cursor.execute('UPDATE xp_data SET bank = bank + ? WHERE user_id = ?', (amount, user.id))
-
-        connection.commit()
-
-
-        await ctx.send(f"Added {amount} Oreos to {user.mention}'s Bank")
-      elif (option=="remove"):
-
-         cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user.id,))
-
-         cursor.execute('UPDATE xp_data SET bank = bank - ? WHERE user_id = ?', (amount, user.id))
-         connection.commit()
-
-
-         await ctx.send(f"Taken {amount} Oreos from {user.mention}")
-
-  else:
-    await ctx.send("Only the bot user can use this command")
+    if option.lower() not in ["add", "remove"]:
+        await ctx.send("❌ Invalid option! Use 'add' or 'remove'.")
+        return
+    
+    column = "xp" if database.lower() == "wallet" else "bank"
+    
+    cursor.execute('INSERT OR IGNORE INTO xp_data (user_id) VALUES (?)', (user.id,))
+    
+    if option.lower() == "add":
+        cursor.execute(f'UPDATE xp_data SET {column} = {column} + ? WHERE user_id = ?', (amount, user.id))
+        await ctx.send(f"✅ Added {amount} Oreos to {user.mention}'s {database.capitalize()}.")
+    else:
+        cursor.execute(f'UPDATE xp_data SET {column} = {column} - ? WHERE user_id = ?', (amount, user.id))
+        await ctx.send(f"❌ Removed {amount} Oreos from {user.mention}'s {database.capitalize()}.")
+    
+    connection.commit()
 
 #------------------------------------------------------------------------------------
 
 
 
 #coin
-coin_usage = {}
-@bot.command(help="$coin <heads or tails> <amount> , if u get the correct one u get that much oreos or loose")
-async def coin(ctx, ht, amount):
-    user_id = ctx.author.id 
+@bot.command(help="$coin <heads or tails> <amount> - Win or lose Oreos!")
+async def coin(ctx, ht, amount: int):
     user_id = str(ctx.author.id)
-    if user_id not in coin_usage:
-      coin_usage[user_id] = {'count': 1, 'last_used': datetime.now()}
-    else:
-      user_data = coin_usage[user_id]
-      user_data['count'] += 1
 
-      if user_data['count'] >= 15:
-          last_used = user_data['last_used']
-          time_difference = datetime.now() - last_used
-          if time_difference.total_seconds() < 86400:
-              remaining_seconds = int(86400 - time_difference.total_seconds())
-              hours, remainder = divmod(remaining_seconds, 3600)
-              minutes, seconds = divmod(remainder, 60)
-              remaining_time = f"{hours}h {minutes}m {seconds}s"
-              embed = discord.Embed(
-                  title=f"you can use the $coin command again in {remaining_time}",
-                  #description=f"Sorry, you can use the $coin command again in {remaining_time}.",
-                  color=0xFF0000  # Red color
-              )
-              await ctx.send(embed=embed)
-              return
-
-    cursor.execute('SELECT xp, level FROM xp_data WHERE user_id = ?', (user_id,))
+    # Fetch user data
+    cursor.execute("SELECT xp, flips_today, last_flip FROM xp_data WHERE user_id = ?", (user_id,))
     user_data = cursor.fetchone()
 
     if user_data is None:
-        await ctx.send("User data not found. Please create an account.")
-        return
+        cursor.execute("INSERT INTO xp_data (user_id, xp, flips_today, last_flip) VALUES (?, ?, ?, ?)", 
+                       (user_id, 1000, 0, datetime.now().isoformat()))
+        connection.commit()
+        user_data = (1000, 0, datetime.now().isoformat())
 
-    user_balance = user_data[0]
+    user_balance, flips_today, last_flip = user_data
 
-    if int(amount) > user_balance:
-        await ctx.send("Insufficient balance for this bet.")
-        return
-    random_heads_tails_generator = random.randint(0, 1) 
+    # Reset flips if new day
+    last_flip_time = datetime.fromisoformat(last_flip) if last_flip else datetime.min
+    if datetime.now() - last_flip_time >= timedelta(days=1):
+        flips_today = 0  
 
-    landed = 'heads' if random_heads_tails_generator == 1 else 'tails'
-    if ht == landed:
-      user = ctx.author
-      username = user.display_name
-      user_avatar = user.avatar.url
-
-      embed = discord.Embed(
-          title=f"{username} ",
-          description=f"💰You won {amount} oreo",
-          color=0x00ff00
-      )
-
-      embed.set_thumbnail(url=user_avatar)
-
-
-      embed.add_field(name="Game Details", value=f"🎲 | Landed {ht}\n🍪 | Bet {amount} oreo on {ht}", inline=False)
-
-      await ctx.send(embed=embed)
-
-
-      if ctx.author == bot.user:
-          return
-
-      user_id = str(ctx.author.id)
-
-      cursor.execute("UPDATE xp_data SET xp = xp + ? WHERE user_id = ?", (amount, user_id))
-
-      connection.commit()
-    if ht != landed:
-      if ctx.author == bot.user:
-          return
-
-      user = ctx.author
-      username = user.display_name
-      user_avatar = user.avatar.url
-
-      embed = discord.Embed(
-          title=f"{username} ",
-          description=f"❌ You lost {amount} oreo",
-          color=0xff0000 
+    # Daily limit check
+    if flips_today >= 30:
+        remaining_time = (last_flip_time + timedelta(days=1)) - datetime.now()
+        hours, minutes, seconds = remaining_time.seconds // 3600, (remaining_time.seconds % 3600) // 60, remaining_time.seconds % 60
+        embed = discord.Embed(
+            title=f"Daily limit reached!",
+            description=f"Come back in {hours}h {minutes}m {seconds}s",
+            color=0xFF0000
         )
+        await ctx.send(embed=embed)
+        return
 
-      embed.set_thumbnail(url=user_avatar)
+    # Check if user has enough balance
+    if amount > user_balance:
+        await ctx.send("❌ Insufficient balance!")
+        return
 
-      embed.add_field(name="Game Details", value=f"🎲 | Landed {landed}\n🍪 | Bet {amount} oreo on {ht}", inline=False)
+    # Luck decrease for large bets (max 20% reduction)
+    base_chance = 0.5
+    penalty = min(amount / 1000, 0.2)  
+    win_chance = max(base_chance - penalty, 0.1)  
 
+    # Flip coin
+    landed = 'heads' if random.random() < win_chance else 'tails'
 
-      await ctx.send(embed=embed)
-      user_id = ctx.author.id
-      cursor.execute("UPDATE xp_data SET xp = xp - ? WHERE user_id = ?", (amount, user_id))
+    if ht == landed:
+        new_balance = user_balance + amount
+        embed = discord.Embed(title=f"{ctx.author.display_name} 🎉",
+                              description=f"💰 You won {amount} Oreos!",
+                              color=0x00ff00)
+    else:
+        new_balance = user_balance - amount
+        embed = discord.Embed(title=f"{ctx.author.display_name} 😢",
+                              description=f"❌ You lost {amount} Oreos!",
+                              color=0xff0000)
 
-      connection.commit()
+    embed.set_thumbnail(url=ctx.author.avatar.url)
+    embed.add_field(name="Game Details", value=f"🎲 Landed **{landed}**\n🍪 Bet **{amount} Oreos** on **{ht}**", inline=False)
+    await ctx.send(embed=embed)
 
+    # Update database
+    cursor.execute("UPDATE xp_data SET xp = ?, flips_today = ?, last_flip = ? WHERE user_id = ?", 
+                   (new_balance, flips_today + 1, datetime.now().isoformat(), user_id))
+    connection.commit()
+
+    
 #------------------------------------------------------------------------------------
 
 
