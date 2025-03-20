@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 import discord
 import requests
 import re
-import yt_dlp as youtube_dl
+import yt_dlp
 from discord.ext import commands
 from discord.ext.commands import BucketType, cooldown
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -19,10 +19,14 @@ import psutil
 import keep_alive
 from character import character_images
 from op_characters import character_images_op
+import os
+from dotenv import load_dotenv
 import opuslib
+import math
 
+load_dotenv()
 
-KEY = os.environ['TOKEN']
+KEY = os.getenv('TOKEN') 
 API_KEY = 'AIzaSyCyo93BP9QL4qlQzgwepf9yFkBeJD3iawk'
 intents = discord.Intents.all()
 
@@ -46,16 +50,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS xp_data (
                 )''')
 
 connection.commit()
-
-
-# URL of Arial TTF file (this is the font used for bal )
-font_url = "https://github.com/matomo-org/travis-scripts/blob/master/fonts/Arial.ttf?raw=true"
-
-# Download the font
-response = requests.get(font_url)
-if response.status_code == 200:
-    with open("arial.ttf", "wb") as f:
-        f.write(response.content)
 
 
 #games battle setup 
@@ -250,7 +244,7 @@ async def ping(ctx):
 #------------------------------------------------------------------------------------
 #message delete command
 @bot.command(help='Use $msgdel to delete messages \\(Only can be used by Mods) ')
-@commands.has_any_role('_______FOUNDER_______', 'Mod')
+@commands.has_any_role('『         ғᴏᴜɴᴅᴇʀ          』', 'Mod')
 async def msgdel(ctx, amount: int):
   if amount == 0:
     await ctx.send('Invalid amount!')
@@ -259,8 +253,7 @@ async def msgdel(ctx, amount: int):
   await ctx.channel.purge(limit=amount + 1)
 
 @msgdel.error
-async def msgdel(ctx, error):
-  if isinstance(error, commands.MissingRole):
+async def msgdel_error(ctx, error):
     await ctx.send('You do not have permission to use that command!')
 
 #------------------------------------------------------------------------------------
@@ -395,7 +388,7 @@ async def spawn_game(channel):
 
   embed = discord.Embed(title='Character Guessing Game')
   embed.set_image(url=image_url)
-  embed.set_footer(text='Type the character name to guess.')
+  embed.set_footer(text='Type the character name to guess. \nYou got 15 seconds on the clock')
 
   await channel.send(embed=embed)
 
@@ -437,23 +430,92 @@ async def spawn_game(channel):
   # Do not delete the game message here, only incorrect user guesses
 #------------------------------------------------------------------------------------
 
-# Leaderbord command
-@bot.command()
-async def lb(ctx):
-    cursor.execute('SELECT user_id, xp FROM xp_data ORDER BY xp DESC LIMIT 10')
-    leaderboard_data = cursor.fetchall()
+#Leadboard
+import discord
+from discord.ext import commands
+from PIL import Image, ImageDraw, ImageFont
+import io
+import requests
+import math
 
-    guild = bot.get_guild(1166279947078336542)  
+@bot.command(name='lb', help="$lb to see the leaderboard of Oreos, use $lb <page> for more pages")
+async def leaderboard(ctx, page: int = 1):
+    per_page = 9  # Users per page
+    try:
+        cursor.execute('SELECT user_id, xp, bank FROM xp_data ORDER BY (xp + bank) DESC')
+        all_users = cursor.fetchall()
+    except Exception as e:
+        await ctx.send(f"Database error: {e}")
+        return
 
-    embed = discord.Embed(title='Oreo Leaderboard', color=discord.Color.blue())
-    for index, (user_id, xp) in enumerate(leaderboard_data, start=1):
-        member = guild.get_member(user_id)
-        if member:
-            embed.add_field(name=f'{index}. {member.name}', value=f'XP: {xp}', inline=False)
-        else:
-            embed.add_field(name=f'{index}. Unknown User', value=f'XP: {xp}', inline=False)
+    if not all_users:
+        await ctx.send("No leaderboard data available.")
+        return
 
-    await ctx.send(embed=embed)
+    total_pages = math.ceil(len(all_users) / per_page)
+    if page < 1 or page > total_pages:
+        await ctx.send(f"Invalid page! Choose between 1 and {total_pages}.")
+        return
+
+    start_index = (page - 1) * per_page
+    top_users = all_users[start_index:start_index + per_page]
+
+    img_width, img_height = 1500, 1900
+    img = Image.new('RGB', (img_width, img_height), color=(12, 16, 21))
+    d = ImageDraw.Draw(img)
+
+    try:
+        title_font = ImageFont.truetype("Swansea-q3pd.ttf", 90)
+        font = ImageFont.truetype("Swansea-q3pd.ttf", 70)
+    except IOError:
+        await ctx.send("Font file missing! Please ensure 'Swansea-q3pd.ttf' is available.")
+        return
+
+    trophy_url = "https://i.postimg.cc/x1JDJgHn/trophy.png"
+    try:
+        trophy_response = requests.get(trophy_url)
+        trophy_icon = Image.open(io.BytesIO(trophy_response.content)).convert("RGBA").resize((120, 120))
+    except Exception:
+        await ctx.send("Failed to load trophy image.")
+        return
+
+    title_text = "Oreo Leaderboard"
+    text_width = d.textbbox((0, 0), title_text, font=title_font)[2]
+    title_x = (img_width - text_width) // 2
+    title_y = 100
+
+    trophy_x_left = title_x - 150
+    trophy_x_right = title_x + text_width + 40
+    trophy_y = title_y - 30
+
+    img.paste(trophy_icon, (trophy_x_left, trophy_y), trophy_icon)
+    img.paste(trophy_icon, (trophy_x_right, trophy_y), trophy_icon)
+
+    d.text((title_x, title_y), title_text, fill='white', font=title_font)
+
+    y_offset = 250
+    user_rank = next((rank for rank, (uid, _, _) in enumerate(all_users, start=1) if uid == ctx.author.id), None)
+
+    for i, (user_id, xp, bank) in enumerate(top_users, start=start_index + 1):
+        user = ctx.guild.get_member(user_id) or await bot.fetch_user(user_id)
+        if not user:
+            continue
+
+        total_oreos = xp + bank
+        d.text((80, y_offset), f"#{i} {user.name}", fill='white', font=font)
+        d.text((200, y_offset + 85), f"{total_oreos:,} Oreos", fill='gold', font=font)
+        y_offset += 180
+
+    image_buffer = io.BytesIO()
+    img.save(image_buffer, format="PNG")
+    image_buffer.seek(0)
+
+    embed = discord.Embed(title="Oreo Leaderboard", color=discord.Color.gold())
+    embed.set_image(url="attachment://leaderboard.png")
+    embed.set_footer(text=f"Page {page}/{total_pages} • Your Rank: {user_rank if user_rank else 'Unranked'}")
+    embed.set_author(name=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar.url)
+
+    await ctx.send(file=discord.File(image_buffer, filename='leaderboard.png'), embed=embed)
 
 
   #-----------------------------------------------------------------------------------
@@ -519,7 +581,7 @@ async def bal(ctx, user: discord.User = None):
             pfp_img.putalpha(mask)
 
             img_width, img_height = img.size
-            pfp_x = img_width - 88
+            pfp_x = img_width - 110
             pfp_y = img_height - 130  # Move PFP slightly up
 
             img.paste(pfp_img, (pfp_x, pfp_y), pfp_img)
@@ -1162,6 +1224,7 @@ async def spoof(ctx, user: discord.User ):
 
 
     await ctx.send(embed=embed)
+
 @bot.command()
 async def rasenmeow(ctx): 
   embed = discord.Embed(title="Rasenmeow", description='', color=0x428579)
@@ -1175,47 +1238,51 @@ async def rasenmeow(ctx):
 #music command
 @bot.command()
 async def play(ctx, *, query):
-    if ctx.author.voice:
-        channel = ctx.author.voice.channel
-        voice_client = await channel.connect()
+    """Plays a song from JioSaavn."""
+    if not ctx.author.voice:
+        return await ctx.send("You need to be in a voice channel first!")
 
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',
-            }],
-        }
+    vc = ctx.voice_client
+    if not vc:
+        vc = await ctx.author.voice.channel.connect()
 
-        async def get_audio_url(query):
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    info = ydl.extract_info(f"ytsearch:{query}", download=False)
-                    if 'entries' in info:
-                        return info['entries'][0]['url']
-                    else:
-                        return info['url']
-                except Exception as e:
-                    print(e)
-                    return None
+    # Search for the song
+    search_url = f"https://jio-saavan-api-gold.vercel.app//search?query={query}"
+    response = requests.get(search_url).json()
 
-        URL = query if query.startswith('http') else await get_audio_url(query)
+    if not response or "data" not in response or not response["data"]:
+        return await ctx.send("No results found!")
 
-        if URL:
-            voice_client.play(discord.FFmpegPCMAudio(URL))
-        else:
-            await ctx.send("No audio found.")
-    else:
-        await ctx.send("You are not in a voice channel.")
+    song = response["data"][0]  # Get the first result
+    song_title = song["title"]
+    song_id = song["id"]
+
+    # Get the song URL
+    song_url = f"https://jio-saavan-api-gold.vercel.app//song?id={song_id}"
+    song_response = requests.get(song_url).json()
+
+    if "data" not in song_response or "media_url" not in song_response["data"]:
+        return await ctx.send("Couldn't fetch the song URL!")
+
+    stream_url = song_response["data"]["media_url"]
+
+    # Play the song
+    vc.stop()
+    ffmpeg_options = {
+        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+        'options': '-vn'
+    }
+    audio_source = discord.FFmpegPCMAudio(stream_url, **ffmpeg_options)
+    vc.play(audio_source)
+
+    await ctx.send(f"🎵 Now playing: {song_title}")
+
 @bot.command()
 async def stop(ctx):
-  voice_client = ctx.voice_client
-
-  if voice_client.is_playing():
-      voice_client.stop()
-
-  await voice_client.disconnect()
+    """Stops and disconnects the bot."""
+    vc = ctx.voice_client
+    if vc:
+        await vc.disconnect()
 
 
 keep_alive.keep_alive()
